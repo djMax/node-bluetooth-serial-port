@@ -29,6 +29,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
+#include "BTDebug.h"
 
 // Vanity bytes. As long as this isn't removed from the executable, I don't
 // mind if I don't get credits in a README or any other documentation. Consider
@@ -594,16 +597,21 @@ pipe_consumer_t* pipe_consumer_new(pipe_t* p)
 
 static void deallocate(pipe_t* p)
 {
+    BTSPLog("deallocate pipe %p: producers %ld consumers %ld", p, p->producer_refcount, p->consumer_refcount);
     assertume(p->producer_refcount == 0);
     assertume(p->consumer_refcount == 0);
 
+    BTSPLog("destroy mutexes");
     mutex_destroy(&p->begin_lock);
     mutex_destroy(&p->end_lock);
 
+    BTSPLog("destroy pushed/popped");
     cond_destroy(&p->just_pushed);
     cond_destroy(&p->just_popped);
 
+    BTSPLog("free buffer");
     free(p->buffer);
+    BTSPLog("free pipe");
     free(p);
 }
 
@@ -638,12 +646,16 @@ void pipe_free(pipe_t* p)
 void pipe_producer_free(pipe_producer_t* handle)
 {
     pipe_t* p = PIPIFY(handle);
+    BTSPLog("pipe_producer_free %p", p);
     size_t new_producer_refcount;
-
+    
+    BTSPLog("Getting begin_lock");
     mutex_lock(&p->begin_lock);
+    BTSPLog("Got begin_lock. refcount %ld", p->producer_refcount);
         assertume(p->producer_refcount > 0);
         new_producer_refcount = --p->producer_refcount;
     mutex_unlock(&p->begin_lock);
+    BTSPLog("Released begin_lock");
 
     if(unlikely(new_producer_refcount == 0))
     {
@@ -656,21 +668,30 @@ void pipe_producer_free(pipe_producer_t* handle)
         // If there are still consumers, wake them up if they're waiting on
         // input from a producer. Otherwise, since we're the last handle
         // altogether, we can free the pipe.
-        if(likely(consumer_refcount > 0))
+        if(likely(consumer_refcount > 0)) {
+            BTSPLog("Waking pipe consumer before freeing producer %p %p", p, &p->just_pushed);
             cond_broadcast(&p->just_pushed);
-        else
+            BTSPLog("Sent broadcast");
+        } else {
+            BTSPLog("Deallocating pipe (producer) %p", p);
             deallocate(p);
+        }
+    } else {
+        BTSPLog("Didn't free pipe producer - refcount not 0");
     }
 }
 
 void pipe_consumer_free(pipe_consumer_t* handle)
 {
     pipe_t* p = PIPIFY(handle);
+    BTSPLog("pipe_consumer_free %p", p);
     size_t new_consumer_refcount;
 
+    BTSPLog("Getting end lock");
     mutex_lock(&p->end_lock);
         new_consumer_refcount = --p->consumer_refcount;
     mutex_unlock(&p->end_lock);
+    BTSPLog("Released end lock");
 
     if(unlikely(new_consumer_refcount == 0))
     {
@@ -683,11 +704,14 @@ void pipe_consumer_free(pipe_consumer_t* handle)
         // If there are still producers, wake them up if they're waiting on
         // room to free up from a consumer. Otherwise, since we're the last
         // handle altogether, we can free the pipe.
-        if(likely(producer_refcount > 0))
+        if(likely(producer_refcount > 0)) {
             cond_broadcast(&p->just_popped);
-        else
+        } else {
+            BTSPLog("Deallocating pipe (consumer) %p", p);
             deallocate(p);
+        }
     }
+    BTSPLog("pipe_consumer_free done");
 }
 
 // Returns the end of the buffer (buf + number_of_bytes_copied).

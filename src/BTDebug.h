@@ -13,6 +13,7 @@
 
 #ifdef DEBUG_BTSP
 #ifdef __APPLE__
+#include <Foundation/Foundation.h>
 #define BTSPLog(...) NSLog(@__VA_ARGS__)
 #else
 #define BTSPLog(...)

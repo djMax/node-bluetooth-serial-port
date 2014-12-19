@@ -9,6 +9,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#import "BTDebug.h"
 #import "BluetoothWorker.h"
 #import "BluetoothDeviceResources.h"
 #import <Foundation/NSObject.h>
@@ -68,19 +69,22 @@ using namespace v8;
     if (!address) {
         address = @"";
     }
+    BTSPLog("Requested BluetoothWorker for %@", address);
     static NSMutableDictionary *instanceWorkers = nil;
     static dispatch_once_t onceToken;
 
     dispatch_once(&onceToken, ^{
+        BTSPLog("Creating worker dictionary.");
         instanceWorkers = [[NSMutableDictionary alloc] init];
     });
 
     BluetoothWorker *worker = nil;
     @synchronized (instanceWorkers) {
-        BluetoothWorker *worker = [instanceWorkers objectForKey:address];
+        worker = [instanceWorkers objectForKey:@""];
         if (!worker) {
+            BTSPLog("Creating BluetoothWorker for %@", address);
             worker = [[BluetoothWorker alloc] init];
-            [instanceWorkers setObject:worker forKey:address];
+            [instanceWorkers setObject:worker forKey:@""];
         }
     }
     return worker;
@@ -123,6 +127,8 @@ using namespace v8;
 /** Task on the worker to disconnect from a Bluetooth device */
 - (void) disconnectFromDeviceTask: (NSString *) address
 {
+    BTSPLog("Disconnecting BluetoothWorker for %@", address);
+
 	// make it safe
 	[devicesLock lock];
 
@@ -130,16 +136,19 @@ using namespace v8;
 
 	if (res != nil) {
 		if (res.producer != NULL) {
+            BTSPLog("Freeing pipe producer");
 			pipe_producer_free(res.producer);
 			res.producer = NULL;
 		}
 
 		if (res.channel != NULL) {
+            BTSPLog("Closing channel");
 			[res.channel closeChannel];
 			res.channel = NULL;
 		}
 
 		if (res.device != NULL) {
+            BTSPLog("Closing connection");
 			[res.device closeConnection];
 			res.device = NULL;
 		}
@@ -148,6 +157,7 @@ using namespace v8;
 	}
 
 	[devicesLock unlock];
+    BTSPLog("Disconnected BluetoothWorker for %@", address);
 }
 
 /** Connect to a Bluetooth device on a specific channel using a pipe to communicate with the main thread */
@@ -173,6 +183,7 @@ using namespace v8;
 - (void)connectDeviceTask: (NSDictionary *)parameters
 {
 	NSString *address = [parameters objectForKey:@"address"];
+    BTSPLog("Connecting BluetoothWorker for %@", address);
 	NSNumber *channelID = [parameters objectForKey:@"channel"];
 	pipe_t *pipe = ((Pipe *)[parameters objectForKey:@"pipe"]).pipe;
 
@@ -199,6 +210,7 @@ using namespace v8;
 	}
 
 	[devicesLock unlock];
+    BTSPLog("Connected BluetoothWorker for %@: %x", address, connectResult);
 }
 
 /** Write synchronized to a connected Bluetooth device */
@@ -222,6 +234,7 @@ using namespace v8;
 /** Task to do the writing */
 - (void)writeAsyncTask:(BTData *)writeData
 {
+    BTSPLog("writeAsync to %@: %d bytes", writeData.address, writeData.data.length);
 	while (![devicesLock tryLock]) {
 		CFRunLoopRun();
 	}
@@ -260,10 +273,12 @@ using namespace v8;
 
 	[devicesLock unlock];
 	CFRunLoopStop(CFRunLoopGetCurrent());
+    BTSPLog("writeAsync complete: %x", writeResult);
 }
 
 - (void)rfcommChannelWriteComplete:(IOBluetoothRFCOMMChannel*)rfcommChannel refcon:(void*)refcon status:(IOReturn)error
 {
+    BTSPLog("rfcommChannelWriteComplete");
 	[devicesLock unlock];
 	CFRunLoopStop(CFRunLoopGetCurrent());
 }
@@ -349,6 +364,7 @@ using namespace v8;
 - (void)rfcommChannelData:(IOBluetoothRFCOMMChannel*)rfcommChannel data:(void *)dataPointer length:(size_t)dataLength
 {
 	NSString *address = [[rfcommChannel getDevice] getAddressString];
+    BTSPLog("rfcommChannelData on %@: %ld bytes", address, dataLength);
 	NSData *data = [NSData dataWithBytes: dataPointer length: dataLength];
 
 	while (![devicesLock tryLock]) {
@@ -364,17 +380,20 @@ using namespace v8;
 
 	[devicesLock unlock];
 	CFRunLoopStop(CFRunLoopGetCurrent());
+    BTSPLog("rfcommChannelData complete.");
 }
 
 /** Called when a channel has been closed */
 - (void)rfcommChannelClosed:(IOBluetoothRFCOMMChannel*)rfcommChannel
 {
+    BTSPLog("rfcommChannelClosed");
 	[self disconnectFromDevice: [[rfcommChannel getDevice] getAddressString]];
 }
 
 /** Called when the device inquiry completes */
 - (void) deviceInquiryComplete: (IOBluetoothDeviceInquiry *) sender error: (IOReturn) error aborted: (BOOL) aborted
 {
+    BTSPLog("deviceInquiryComplete");
 	@synchronized(self) {
 		if (inquiryProducer != NULL) {
 			// free the producer so the main thread is signaled that the inquiry has been completed.
@@ -387,6 +406,7 @@ using namespace v8;
 /** Called when a device has been found */
 - (void) deviceInquiryDeviceFound: (IOBluetoothDeviceInquiry*) sender device: (IOBluetoothDevice*) device
 {
+    BTSPLog("deviceInquiryDeviceFound");
 	@synchronized(self) {
 		if (inquiryProducer != NULL) {
 			device_info_t *info = new device_info_t;
