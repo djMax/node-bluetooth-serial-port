@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "BTDebug.h"
 #include "BTSerialPortBinding.h"
 #include "BluetoothWorker.h"
 
@@ -42,6 +43,7 @@ uv_mutex_t write_queue_mutex;
 ngx_queue_t write_queue;
 
 void BTSerialPortBinding::EIO_Connect(uv_work_t *req) {
+    BTSPLog("EIO_Connect");
     connect_baton_t *baton = static_cast<connect_baton_t *>(req->data);
 
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -68,6 +70,7 @@ void BTSerialPortBinding::EIO_Connect(uv_work_t *req) {
 }
 
 void BTSerialPortBinding::EIO_AfterConnect(uv_work_t *req) {
+    BTSPLog("EIO_AfterConnect");
     connect_baton_t *baton = static_cast<connect_baton_t *>(req->data);
 
     TryCatch try_catch;
@@ -92,6 +95,7 @@ void BTSerialPortBinding::EIO_AfterConnect(uv_work_t *req) {
 }
 
 void BTSerialPortBinding::EIO_Write(uv_work_t *req) {
+    BTSPLog("EIO_Write");
     queued_write_t *queuedWrite = static_cast<queued_write_t*>(req->data);
     write_baton_t *data = static_cast<write_baton_t*>(queuedWrite->baton);
 
@@ -109,6 +113,7 @@ void BTSerialPortBinding::EIO_Write(uv_work_t *req) {
 }
 
 void BTSerialPortBinding::EIO_AfterWrite(uv_work_t *req) {
+    BTSPLog("EIO_AfterWrite");
     queued_write_t *queuedWrite = static_cast<queued_write_t*>(req->data);
     write_baton_t *data = static_cast<write_baton_t*>(queuedWrite->baton);
 
@@ -143,6 +148,7 @@ void BTSerialPortBinding::EIO_AfterWrite(uv_work_t *req) {
 }
 
 void BTSerialPortBinding::EIO_Read(uv_work_t *req) {
+    BTSPLog("EIO_Read");
     unsigned int buf[1024] = { 0 };
 
     read_baton_t *baton = static_cast<read_baton_t *>(req->data);
@@ -165,6 +171,7 @@ void BTSerialPortBinding::EIO_Read(uv_work_t *req) {
 }
 
 void BTSerialPortBinding::EIO_AfterRead(uv_work_t *req) {
+    BTSPLog("EIO_AfterRead");
     HandleScope scope;
 
     read_baton_t *baton = static_cast<read_baton_t *>(req->data);
@@ -200,6 +207,7 @@ void BTSerialPortBinding::EIO_AfterRead(uv_work_t *req) {
 }
 
 void BTSerialPortBinding::Init(Handle<Object> target) {
+    BTSPLog("Init");
     HandleScope scope;
 
     Local<FunctionTemplate> t = FunctionTemplate::New(New);
@@ -223,6 +231,7 @@ BTSerialPortBinding::~BTSerialPortBinding() {
 }
 
 Handle<Value> BTSerialPortBinding::New(const Arguments& args) {
+    BTSPLog("New");
     HandleScope scope;
 
     uv_mutex_init(&write_queue_mutex);
@@ -262,6 +271,7 @@ Handle<Value> BTSerialPortBinding::New(const Arguments& args) {
 }
 
 Handle<Value> BTSerialPortBinding::Write(const Arguments& args) {
+    BTSPLog("Write");
     HandleScope scope;
 
     // usage
@@ -318,6 +328,7 @@ Handle<Value> BTSerialPortBinding::Write(const Arguments& args) {
 }
 
 Handle<Value> BTSerialPortBinding::Close(const Arguments& args) {
+    BTSPLog("Close");
     HandleScope scope;
 
     if (args.Length() != 1) {
@@ -341,6 +352,7 @@ Handle<Value> BTSerialPortBinding::Close(const Arguments& args) {
 }
 
 Handle<Value> BTSerialPortBinding::Read(const Arguments& args) {
+    BTSPLog("Read");
     HandleScope scope;
 
     if (args.Length() != 1) {
