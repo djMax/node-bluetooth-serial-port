@@ -40,7 +40,7 @@ struct device_info_t {
 	NSTimer *keepAliveTimer;
 }
 
-+ (id)getInstance;
++ (id)getInstance: (NSString *) address;
 - (void) disconnectFromDevice: (NSString *) address;
 - (IOReturn)connectDevice: (NSString *) address onChannel: (int) channel withPipe: (pipe_t *)pipe;
 - (IOReturn)writeAsync:(void *)data length:(UInt16)length toDevice: (NSString *)address;

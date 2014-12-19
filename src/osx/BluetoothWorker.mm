@@ -63,16 +63,27 @@ using namespace v8;
 @implementation BluetoothWorker
 
 /** The BluetoothWorker class is a singleton. An instance can be obtained using this method */
-+ (id)getInstance
++ (id)getInstance: (NSString *) address
 {
-    static BluetoothWorker *instance = nil;
+    if (!address) {
+        address = @"";
+    }
+    static NSMutableDictionary *instanceWorkers = nil;
     static dispatch_once_t onceToken;
 
     dispatch_once(&onceToken, ^{
-        instance = [[self alloc] init];
+        instanceWorkers = [[NSMutableDictionary alloc] init];
     });
 
-    return instance;
+    BluetoothWorker *worker = nil;
+    @synchronized (instanceWorkers) {
+        BluetoothWorker *worker = [instanceWorkers objectForKey:address];
+        if (!worker) {
+            worker = [[BluetoothWorker alloc] init];
+            [instanceWorkers setObject:worker forKey:address];
+        }
+    }
+    return worker;
 }
 
 /** Initializes a BluetoothWorker object */

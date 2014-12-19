@@ -48,7 +48,7 @@ void DeviceINQ::EIO_SdpSearch(uv_work_t *req) {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
     NSString *address = [NSString stringWithCString:baton->address encoding:NSASCIIStringEncoding];
-    BluetoothWorker *worker = [BluetoothWorker getInstance];
+    BluetoothWorker *worker = [BluetoothWorker getInstance: nil];
     baton->channelID = [worker getRFCOMMChannelID: address];
 
     [pool release];
@@ -121,7 +121,7 @@ Handle<Value> DeviceINQ::Inquire(const Arguments& args) {
 
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-    BluetoothWorker *worker = [BluetoothWorker getInstance];
+    BluetoothWorker *worker = [BluetoothWorker getInstance: nil];
 
     // create pipe to communicate with delegate
     pipe_t *pipe = pipe_new(sizeof(device_info_t), 0);
