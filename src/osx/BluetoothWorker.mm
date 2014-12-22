@@ -60,6 +60,8 @@ using namespace v8;
 @synthesize address;
 @end
 
+static NSMutableDictionary *instanceWorkers = nil;
+
 /** Class that is handling all the Bluetooth work */
 @implementation BluetoothWorker
 
@@ -67,10 +69,9 @@ using namespace v8;
 + (id)getInstance: (NSString *) address
 {
     if (!address) {
-        address = @"";
+        address = @"inquiry";
     }
     BTSPLog("Requested BluetoothWorker for %@", address);
-    static NSMutableDictionary *instanceWorkers = nil;
     static dispatch_once_t onceToken;
 
     dispatch_once(&onceToken, ^{
@@ -84,7 +85,7 @@ using namespace v8;
         if (!worker) {
             BTSPLog("Creating BluetoothWorker for %@", address);
             worker = [[BluetoothWorker alloc] init];
-            [instanceWorkers setObject:worker forKey:@""];
+            [instanceWorkers setObject:worker forKey:address];
         }
     }
     return worker;
@@ -96,7 +97,7 @@ using namespace v8;
   	self = [super init];
   	sdpLock = [[NSLock alloc] init];
 	devices = [[NSMutableDictionary alloc] init];
-	devicesLock = [[NSLock alloc] init];
+	deviceLock = [[NSLock alloc] init];
   	connectLock = [[NSLock alloc] init];
   	writeLock = [[NSLock alloc] init];
 
@@ -130,7 +131,7 @@ using namespace v8;
     BTSPLog("Disconnecting BluetoothWorker for %@", address);
 
 	// make it safe
-	[devicesLock lock];
+	[deviceLock lock];
 
 	BluetoothDeviceResources *res = [devices objectForKey: address];
 
@@ -156,7 +157,7 @@ using namespace v8;
 		[devices removeObjectForKey: address];
 	}
 
-	[devicesLock unlock];
+	[deviceLock unlock];
     BTSPLog("Disconnected BluetoothWorker for %@", address);
 }
 
@@ -189,7 +190,7 @@ using namespace v8;
 
 	connectResult = kIOReturnError;
 
-	[devicesLock lock];
+	[deviceLock lock];
 
 	if ([devices objectForKey: address] == nil) {
 		IOBluetoothDevice *device = [IOBluetoothDevice deviceWithAddressString:address];
@@ -209,7 +210,7 @@ using namespace v8;
 		}
 	}
 
-	[devicesLock unlock];
+	[deviceLock unlock];
     BTSPLog("Connected BluetoothWorker for %@: %x", address, connectResult);
 }
 
@@ -234,8 +235,8 @@ using namespace v8;
 /** Task to do the writing */
 - (void)writeAsyncTask:(BTData *)writeData
 {
-    BTSPLog("writeAsync to %@: %d bytes", writeData.address, writeData.data.length);
-	while (![devicesLock tryLock]) {
+    BTSPLog("writeAsync to %@: %ld bytes", writeData.address, writeData.data.length);
+	while (![deviceLock tryLock]) {
 		CFRunLoopRun();
 	}
 
@@ -259,9 +260,9 @@ using namespace v8;
 			ssize_t numBytesToWrite = ((numBytesRemaining > rfcommChannelMTU) ? rfcommChannelMTU :  numBytesRemaining);
 
 			// Send the bytes
-			writeResult = [res.channel writeAsync:idx length:numBytesToWrite refcon:devicesLock];
+			writeResult = [res.channel writeAsync:idx length:numBytesToWrite refcon:deviceLock];
 
-			while (![devicesLock tryLock]) {
+			while (![deviceLock tryLock]) {
 				CFRunLoopRun();
 			}
 
@@ -271,7 +272,7 @@ using namespace v8;
 		}
 	}
 
-	[devicesLock unlock];
+	[deviceLock unlock];
 	CFRunLoopStop(CFRunLoopGetCurrent());
     BTSPLog("writeAsync complete: %x", writeResult);
 }
@@ -279,7 +280,7 @@ using namespace v8;
 - (void)rfcommChannelWriteComplete:(IOBluetoothRFCOMMChannel*)rfcommChannel refcon:(void*)refcon status:(IOReturn)error
 {
     BTSPLog("rfcommChannelWriteComplete");
-	[devicesLock unlock];
+	[deviceLock unlock];
 	CFRunLoopStop(CFRunLoopGetCurrent());
 }
 
@@ -367,7 +368,7 @@ using namespace v8;
     BTSPLog("rfcommChannelData on %@: %ld bytes", address, dataLength);
 	NSData *data = [NSData dataWithBytes: dataPointer length: dataLength];
 
-	while (![devicesLock tryLock]) {
+	while (![deviceLock tryLock]) {
 		CFRunLoopRun();
 	}
 
@@ -378,7 +379,7 @@ using namespace v8;
 		pipe_push(res.producer, [data bytes], data.length);
 	}
 
-	[devicesLock unlock];
+	[deviceLock unlock];
 	CFRunLoopStop(CFRunLoopGetCurrent());
     BTSPLog("rfcommChannelData complete.");
 }
