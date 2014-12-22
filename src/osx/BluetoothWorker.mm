@@ -61,6 +61,7 @@ using namespace v8;
 @end
 
 static NSMutableDictionary *instanceWorkers = nil;
+static NSLock *globalConnectLock = nil;
 
 /** Class that is handling all the Bluetooth work */
 @implementation BluetoothWorker
@@ -76,6 +77,7 @@ static NSMutableDictionary *instanceWorkers = nil;
 
     dispatch_once(&onceToken, ^{
         BTSPLog("Creating worker dictionary.");
+        globalConnectLock = [[NSLock alloc] init];
         instanceWorkers = [[NSMutableDictionary alloc] init];
     });
 
@@ -197,7 +199,9 @@ static NSMutableDictionary *instanceWorkers = nil;
 
 		if (device != nil) {
 			IOBluetoothRFCOMMChannel *channel = [[IOBluetoothRFCOMMChannel alloc] init];
+            [globalConnectLock lock];
 			if ([device openRFCOMMChannelSync: &channel withChannelID:[channelID intValue] delegate: self] == kIOReturnSuccess) {
+                [globalConnectLock unlock];
 				connectResult = kIOReturnSuccess;
 			   	pipe_producer_t *producer = pipe_producer_new(pipe);
 			   	BluetoothDeviceResources *res = [[BluetoothDeviceResources alloc] init];
@@ -206,7 +210,9 @@ static NSMutableDictionary *instanceWorkers = nil;
 			   	res.channel = channel;
 
 			   	[devices setObject:res forKey:address];
-			}
+            } else {
+                [globalConnectLock unlock];
+            }
 		}
 	}
 
