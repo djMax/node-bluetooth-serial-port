@@ -81,7 +81,7 @@ static NSMutableDictionary *instanceWorkers = nil;
 
     BluetoothWorker *worker = nil;
     @synchronized (instanceWorkers) {
-        worker = [instanceWorkers objectForKey:@""];
+        worker = [instanceWorkers objectForKey:address];
         if (!worker) {
             BTSPLog("Creating BluetoothWorker for %@", address);
             worker = [[BluetoothWorker alloc] init];
